@@ -1,0 +1,12 @@
+{
+  "MODEL_NAME": "medium",
+  "LANGUAGE": "it",
+  "TRANSLATE": true,
+  "ENABLE_DIARIZATION": false,
+  "DIARIZATION_MODEL": "pyannote/speaker-diarization",
+  "OUTPUT_FORMAT": "txt",
+  "NUM_THREADS": 8,
+  "LOG_LEVEL": "INFO",
+  "INPUT_FILE": "input.mp4",
+  "OUTPUT_FILE": "output.txt"
+}
