@@ -1,87 +1,241 @@
-README — Speech-to-Text Containerization (CPU) with Optional Diarization
-=====================================================================
+# 🎙️ Speech-to-Text Pipeline (Dockerized)
 
-Project context
----------------
-This project containerizes a Speech-to-Text (STT) pipeline based on Whisper (via faster-whisper),
-and optionally performs speaker diarization using pyannote.audio.
+This project implements a **containerized speech-to-text pipeline** using the Whisper model.
+It supports both **audio and video inputs**, performs automatic transcription with timestamps, and optionally enables **speaker diarization**.
 
-The container is CLI-only (no GUI) and is designed to be configurable WITHOUT rebuilding the image.
-Configuration is supported via:
-- config.json (mounted into the container)
-- environment variables in docker-compose.yml (or shell overrides)
+The entire system is packaged using Docker to ensure **reproducibility, portability, and ease of use**.
 
-Folder structure
-----------------
-./input_videos/   -> place input MP4 (or audio) files here
-./output/         -> generated transcripts and diarization files appear here
-./config.json     -> runtime configuration (mounted into /app/config.json)
+---
 
-Quick start (transcription only)
---------------------------------
-1) Put an input file into input_videos/
-   Example: input_videos/input.mp4
+## 🚀 Features
 
-2) Run:
-   docker compose up --build
+* Supports **audio and video inputs**
+* Works with common formats:
 
-3) Output will be created in:
-   output/output.txt   (default)
-   output/temp.wav     (intermediate audio extraction)
+  * Audio: `.wav`, `.mp3`, `.m4a`
+  * Video: `.mp4`, `.mkv`, `.avi`
+* Automatic **audio extraction and normalization** using FFmpeg
+* High-quality transcription using **faster-whisper**
+* **Timestamped output**
+* Optional **speaker diarization** using pyannote.audio
+* Runtime configuration via:
 
-Changing input/output WITHOUT editing code or rebuilding
---------------------------------------------------------
-Option A: Use environment variables (recommended)
-  INPUT_FILE=meeting.mp4 OUTPUT_FILE=meeting.txt docker compose up --build
+  * `config.json`
+  * environment variables
+  * command-line arguments
+* Progress display during transcription
+* Fully reproducible via Docker
 
-Option B: Edit config.json (mounted volume)
-  Set:
-    "INPUT_FILE": "meeting.mp4",
-    "OUTPUT_FILE": "meeting.txt"
+---
 
-Translation to English
-----------------------
-You can translate the audio to English using Whisper task="translate".
+## 🧠 Pipeline Overview
 
-Option A: Set in config.json:
-  "TRANSLATE": true
+```
+Input File (Audio/Video)
+        │
+        ▼
+FFmpeg (Audio Extraction & Conversion)
+        │
+        ▼
+Standard WAV (mono, 16kHz)
+        │
+        ▼
+Whisper Model (Transcription)
+        │
+        ▼
+Timestamped Text Output
+        │
+        ├──────────────► output.txt
+        │
+        ▼
+(Optional) Speaker Diarization
+        │
+        ▼
+Speaker Segments Output
+        └──────────────► output_diarized.txt
+```
 
-Option B: Run once via CLI:
-  docker compose run --rm speech2text python trascrizione.py --task translate
+---
 
-Language selection
-------------------
-- Use "LANGUAGE": "auto" for automatic language detection.
-- Or set a specific language code, e.g. "it", "en", "fr".
+## 📋 Prerequisites
 
-Speaker diarization (optional)
-------------------------------
-Diarization is enabled only when:
-- ENABLE_DIARIZATION=true AND
-- a valid Hugging Face token is provided via HF_TOKEN AND
-- you have accepted the model terms on Hugging Face.
+* Docker (Docker Desktop or Docker Engine)
+* Internet connection (required for first model download)
+* Optional:
 
-1) Accept model terms:
+  * Hugging Face account + token (for diarization)
+
+---
+
+## 📁 Project Structure
+
+```
+Speech_to_Text_Containerization_CPU/
+│
+├── trascrizione.py        # main transcription pipeline
+├── confronto.py           # evaluation script
+├── Dockerfile             # container setup
+├── docker-compose.yml     # container execution
+├── config.json            # configuration file
+├── requirements.txt       # dependencies
+│
+├── input_videos/          # input files
+├── output/                # generated outputs
+```
+
+---
+
+## ▶️ How to Run
+
+### 1. Create required folders
+
+```bash
+mkdir input_videos output
+```
+
+---
+
+### 2. Add input file
+
+Place any file inside:
+
+```
+input_videos/
+```
+
+Examples:
+
+```
+input_videos/input.mp4
+input_videos/lecture.wav
+input_videos/speech.mp3
+```
+
+---
+
+### 3. Run the pipeline
+
+```bash
+docker compose up --build
+```
+
+---
+
+### 4. Check output
+
+```
+output/output.txt
+```
+
+---
+
+## ⚙️ Runtime Configuration
+
+### 🔹 Using environment variables
+
+```bash
+INPUT_FILE=lecture.wav OUTPUT_FILE=lecture.txt docker compose up
+```
+
+---
+
+### 🔹 Using command-line arguments
+
+```bash
+docker compose run --rm speech2text \
+python trascrizione.py \
+--input /app/input_videos/lecture.wav \
+--output /app/output/lecture.txt
+```
+
+---
+
+### 🔹 Using config.json
+
+```json
+{
+  "INPUT_FILE": "input.mp4",
+  "OUTPUT_FILE": "output.txt",
+  "ENABLE_DIARIZATION": false
+}
+```
+
+---
+
+## 🎧 Example: Audio Input (Professor Requirement)
+
+```bash
+INPUT_FILE=lecture.wav OUTPUT_FILE=lecture.txt docker compose up
+```
+
+✔ No video required
+✔ Direct audio transcription supported
+
+---
+
+## 👥 Speaker Diarization (Optional)
+
+To enable diarization:
+
+1. Create a Hugging Face account
+2. Accept model access:
    https://huggingface.co/pyannote/speaker-diarization
+3. Generate a token
 
-2) Create a Hugging Face access token (Read):
-   https://huggingface.co/settings/tokens
+Run:
 
-3) Provide the token at runtime (recommended via shell env var):
-   export HF_TOKEN=hf_xxx
-   ENABLE_DIARIZATION=true docker compose up --build
+```bash
+export HF_TOKEN=your_token_here
+ENABLE_DIARIZATION=true docker compose up
+```
 
-When diarization runs, you will get:
-  output/<output_name>_diarized.txt
+---
 
-Evaluation script (confronto.py)
---------------------------------
-This script compares a reference transcript (REF) with a hypothesis transcript (HYP) and writes a CSV report.
+## 🐳 Run via Docker Hub
 
-Example:
-  docker compose run --rm speech2text python confronto.py --ref /app/output/ref.txt --hyp /app/output/hyp.txt --out /app/output/report.csv
+Instead of cloning the repo:
 
-Notes
------
-- This container is CPU-only. The Whisper model is loaded with compute_type=int8 to reduce memory usage.
-- For long files, consider using a smaller Whisper model (e.g., small) or increasing available RAM/CPU.
+```bash
+docker run --rm \
+  -v $(pwd)/input_videos:/app/input_videos \
+  -v $(pwd)/output:/app/output \
+  kavitha245p/speech2text:cpu
+```
+
+---
+
+## 📊 Output
+
+* `output.txt` → transcription with timestamps
+* `*_diarized.txt` → speaker-separated output (if enabled)
+
+---
+
+## ⚠️ Known Limitations
+
+* Speaker diarization requires a valid Hugging Face token
+* First run may be slow due to model download
+* Long audio files require more CPU and memory
+* Progress bar is based on processed segments (not continuous from 0%)
+
+---
+
+## 🎯 Use Case
+
+This project was developed as part of a Master's thesis to convert a research prototype into a **reproducible and portable speech-to-text system using Docker**.
+
+---
+
+## 🔗 Links
+
+* GitHub Repository:
+  https://github.com/pllkth-501476/Speech2text_Dockerization
+
+* Docker Hub Image:
+  https://hub.docker.com/r/kavitha245p/speech2text
+
+---
+
+## 👩‍💻 Author
+
+Kavitha
