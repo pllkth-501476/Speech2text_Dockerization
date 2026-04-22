@@ -6,8 +6,8 @@ services:
     environment:
       # --- Runtime configuration (can be overridden without rebuilding the image) ---
       # Input/output filenames (relative to mounted folders)
-      INPUT_FILE: ${INPUT_FILE:-input.mp4}
-      OUTPUT_FILE: ${OUTPUT_FILE:-output.txt}
+      INPUT_FILE: ${INPUT_FILE:-english.mp4}
+      OUTPUT_FILE: ${OUTPUT_FILE:-english.txt}
 
       # Whisper parameters
       MODEL_NAME: ${MODEL_NAME:-medium}
@@ -15,7 +15,7 @@ services:
       TRANSLATE: ${TRANSLATE:-false}
 
       # Diarization parameters (requires Hugging Face authentication + acceptance of model terms)
-      ENABLE_DIARIZATION: ${ENABLE_DIARIZATION:-false}
+      ENABLE_DIARIZATION: ${ENABLE_DIARIZATION:-True}
       DIARIZATION_MODEL: ${DIARIZATION_MODEL:-pyannote/speaker-diarization}
       HF_TOKEN: ${HF_TOKEN:-}
 

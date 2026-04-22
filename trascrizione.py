@@ -4,118 +4,110 @@ import argparse
 import logging
 from pathlib import Path
 
+import ffmpeg
 from faster_whisper import WhisperModel
 from tqdm import tqdm
-import ffmpeg
 
-# ---------------------- CONFIG & LOGGING ---------------------- #
-
+# -------------------- logging -------------------- #
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    format="%(asctime)s [%(levelname)s] %(message)s"
 )
-
 logger = logging.getLogger(__name__)
 
-CONFIG_PATH = Path("/app/config.json")
+# -------------------- config -------------------- #
+CONFIG_PATH = "/app/config.json"
 
 DEFAULT_CONFIG = {
     "MODEL_NAME": "medium",
-    "LANGUAGE": "auto",          # 'auto' -> Whisper auto-detection
-    "TRANSLATE": False,          # if True, use task='translate'
+    "LANGUAGE": "auto",
+    "TRANSLATE": False,
     "ENABLE_DIARIZATION": False,
     "DIARIZATION_MODEL": "pyannote/speaker-diarization",
-    "OUTPUT_FORMAT": "txt",
-    "NUM_THREADS": 8,
-    "LOG_LEVEL": "INFO",
-    "HF_TOKEN": None,
     "INPUT_FILE": "input.mp4",
-    "OUTPUT_FILE": "output.txt"
+    "OUTPUT_FILE": "output.txt",
+    "HF_TOKEN": None
 }
 
 
-def str_to_bool(v):
-    return str(v).lower() in ("1", "true", "yes")
+def to_bool(value):
+    return str(value).lower() in ["true", "1", "yes"]
 
 
 def load_config():
     config = DEFAULT_CONFIG.copy()
 
-    if CONFIG_PATH.exists():
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            file_config = json.load(f)
-            config.update(file_config)
-            logger.info(f"Loaded configuration from {CONFIG_PATH}")
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                file_config = json.load(f)
+                config.update(file_config)
+                logger.info("Loaded configuration from config.json")
+        except Exception as e:
+            logger.warning(f"Could not read config.json, using defaults: {e}")
 
-    # Override with env vars if present
-    for key in config.keys():
-        env_val = os.getenv(key)
-        if env_val is not None:
-            config[key] = env_val
+    # environment variables override config file
+    for key in config:
+        env_value = os.getenv(key)
+        if env_value is not None:
+            config[key] = env_value
 
-    # Type normalization
-    config["ENABLE_DIARIZATION"] = str_to_bool(config.get("ENABLE_DIARIZATION", False))
-    config["TRANSLATE"] = str_to_bool(config.get("TRANSLATE", False))
-    config["NUM_THREADS"] = int(config.get("NUM_THREADS", 8))
+    config["TRANSLATE"] = to_bool(config["TRANSLATE"])
+    config["ENABLE_DIARIZATION"] = to_bool(config["ENABLE_DIARIZATION"])
 
-    logger.info(f"Active configuration: {config}")
     return config
 
 
-# ---------------------- AUDIO PREPARATION ---------------------- #
-
-def prepare_audio(input_file: Path, wav_output: Path, logger):
+# -------------------- audio preparation -------------------- #
+def prepare_audio(input_file, output_wav):
     """
-    Converts any input media (video or audio) to mono 16kHz WAV.
-    Works for mp4, wav, mp3, m4a, etc.
+    Convert any input (video or audio) into mono 16kHz wav
     """
     try:
-        logger.info("Preparing audio -> %s", wav_output)
+        logger.info(f"Preparing audio from {input_file}")
         (
             ffmpeg
             .input(str(input_file))
-            .output(str(wav_output), ac=1, ar="16000", format="wav")
+            .output(str(output_wav), ac=1, ar="16000", format="wav")
             .overwrite_output()
             .run(capture_stdout=True, capture_stderr=True)
         )
-        return wav_output
     except ffmpeg.Error as e:
-        logger.error("FFmpeg failed while processing: %s", input_file)
+        logger.error("FFmpeg failed.")
         if e.stderr:
-            logger.error(e.stderr.decode())
+            logger.error(e.stderr.decode(errors="ignore"))
         raise
 
 
-# ---------------------- TRANSCRIPTION ---------------------- #
-
-def transcribe_file(input_file: Path, output_file: Path, config, cli_language=None, cli_task=None, cli_diarization=False):
+# -------------------- transcription -------------------- #
+def transcribe_file(input_file, output_file, config, cli_language=None, cli_task=None, force_diarization=False):
     model_name = config["MODEL_NAME"]
 
-    # Language logic
-    cfg_language = config.get("LANGUAGE", "auto")
-    language = cli_language if cli_language is not None else cfg_language
+    # language
+    language = cli_language if cli_language else config["LANGUAGE"]
     if str(language).lower() == "auto":
         language = None
 
-    # Task logic
-    if cli_task is not None:
+    # task
+    if cli_task:
         task = cli_task
     else:
-        task = "translate" if config.get("TRANSLATE", False) else "transcribe"
+        task = "translate" if config["TRANSLATE"] else "transcribe"
 
-    enable_diarization = cli_diarization or config["ENABLE_DIARIZATION"]
+    enable_diarization = force_diarization or config["ENABLE_DIARIZATION"]
     hf_token = config.get("HF_TOKEN") or os.getenv("HF_TOKEN")
     diarization_model = config.get("DIARIZATION_MODEL", "pyannote/speaker-diarization")
 
     temp_wav = Path("/app/output/temp.wav")
 
-    # Convert any media input to wav
-    prepare_audio(input_file, temp_wav, logger)
+    # convert media to wav
+    prepare_audio(input_file, temp_wav)
 
-    logger.info("Loading Whisper model: %s", model_name)
+    logger.info(f"Loading Whisper model: {model_name}")
     model = WhisperModel(model_name, device="cpu", compute_type="int8")
 
-    logger.info("Starting transcription (task=%s, language=%s)...", task, language or "auto")
+    logger.info("Starting transcription...")
+    logger.info("Transcription started: 0%% completed")
 
     segments, info = model.transcribe(
         str(temp_wav),
@@ -127,10 +119,11 @@ def transcribe_file(input_file: Path, output_file: Path, config, cli_language=No
     duration = getattr(info, "duration", None)
 
     progress_bar = None
-    last_time = 0.0
+    last_end = 0.0
 
     if duration:
-        progress_bar = tqdm(total=duration, unit="sec", desc="Transcribing")
+        progress_bar = tqdm(total=duration, unit="sec", desc="Transcribing", initial=0)
+        progress_bar.refresh()
 
     with open(output_file, "w", encoding="utf-8") as f:
         for segment in segments:
@@ -141,16 +134,15 @@ def transcribe_file(input_file: Path, output_file: Path, config, cli_language=No
             f.write(f"[{start:0>8.2f} - {end:0>8.2f}] {text}\n")
 
             if progress_bar:
-                delta = max(0.0, end - last_time)
-                progress_bar.update(delta)
-                last_time = end
+                progress_bar.update(max(0, end - last_end))
+                last_end = end
 
     if progress_bar:
         progress_bar.close()
 
-    logger.info("Transcription saved to %s", output_file)
+    logger.info(f"Transcription saved to {output_file}")
 
-    # ---------------------- DIARIZATION ---------------------- #
+    # -------------------- diarization -------------------- #
     if enable_diarization:
         if not hf_token:
             logger.warning("HF_TOKEN missing. Skipping diarization.")
@@ -159,62 +151,58 @@ def transcribe_file(input_file: Path, output_file: Path, config, cli_language=No
         try:
             from pyannote.audio import Pipeline
 
-            logger.info("Loading pyannote diarization model: %s", diarization_model)
+            logger.info(f"Loading pyannote diarization model: {diarization_model}")
 
-            pipeline = Pipeline.from_pretrained(
-                diarization_model,
-                use_auth_token=hf_token
-            )
+            # some versions use token= , older ones use use_auth_token=
+            try:
+                pipeline = Pipeline.from_pretrained(diarization_model, token=hf_token)
+            except TypeError:
+                pipeline = Pipeline.from_pretrained(diarization_model, use_auth_token=hf_token)
 
-            diarization = pipeline(temp_wav)
+            diarization = pipeline(str(temp_wav))
 
-            diarization_output = Path(output_file).with_name(
-                Path(output_file).stem + "_diarized.txt"
-            )
+            diarization_output = output_file.parent / f"{output_file.stem}_diarized.txt"
 
             with open(diarization_output, "w", encoding="utf-8") as f:
                 for segment, _, speaker in diarization.itertracks(yield_label=True):
-                    f.write(
-                        f"[{segment.start:0>8.2f} - {segment.end:0>8.2f}] Speaker {speaker}\n"
-                    )
+                    f.write(f"[{segment.start:0>8.2f} - {segment.end:0>8.2f}] Speaker {speaker}\n")
 
-            logger.info("Diarization saved to %s", diarization_output)
+            logger.info(f"Diarization saved to {diarization_output}")
 
         except Exception as e:
-            logger.error("Diarization failed: %s", e)
-
+            logger.error(f"Diarization failed: {e}")
     else:
-        logger.info("Diarization disabled")
+        logger.info("Diarization disabled.")
 
 
-# ---------------------- MAIN ---------------------- #
-
+# -------------------- main -------------------- #
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Speech-to-Text Pipeline")
-
-    parser.add_argument("--input", help="Input media file (video or audio)")
+    parser.add_argument("--input", help="Input media file")
     parser.add_argument("--output", help="Output transcript file")
-    parser.add_argument("--language", help="Language code, e.g. 'en', 'it', or 'auto'")
+    parser.add_argument("--language", help="Language code (en, it, hi, auto, etc.)")
     parser.add_argument("--task", choices=["transcribe", "translate"], help="Whisper task")
     parser.add_argument("--diarization", action="store_true", help="Enable diarization for this run")
-    parser.add_argument("--no-gui", action="store_true", help="Ignored flag kept for compatibility")
+    parser.add_argument("--no-gui", action="store_true", help="Compatibility flag")
 
     args = parser.parse_args()
-
     config = load_config()
 
-    input_file = Path(args.input or f"/app/input_videos/{config['INPUT_FILE']}")
-    output_file = Path(args.output or f"/app/output/{config['OUTPUT_FILE']}")
+    input_name = args.input if args.input else f"/app/input_videos/{config['INPUT_FILE']}"
+    output_name = args.output if args.output else f"/app/output/{config['OUTPUT_FILE']}"
+
+    input_file = Path(input_name)
+    output_file = Path(output_name)
 
     if not input_file.exists():
-        logger.error("Input file not found: %s", input_file)
+        logger.error(f"Input file not found: {input_file}")
         exit(1)
 
     transcribe_file(
-        input_file,
-        output_file,
-        config,
+        input_file=input_file,
+        output_file=output_file,
+        config=config,
         cli_language=args.language,
         cli_task=args.task,
-        cli_diarization=args.diarization
+        force_diarization=args.diarization
     )
