@@ -1,4 +1,4 @@
-# 🎙️ Speech-to-Text Pipeline (Dockerized)
+# 🎙️ Dockerized Speech-to-Text Pipeline
 
 This project implements a **containerized speech-to-text pipeline** using the Whisper model.
 It supports both **audio and video inputs**, performs automatic transcription with timestamps, and optionally enables **speaker diarization**.
