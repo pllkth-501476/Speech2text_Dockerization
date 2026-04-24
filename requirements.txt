@@ -13,3 +13,4 @@ nltk>=3.8.1
 tqdm>=4.65.0
 python-dateutil>=2.8.2
 setuptools<81
+huggingface_hub==0.25.2
