@@ -3,7 +3,7 @@
   "LANGUAGE": "auto",
   "TRANSLATE": false,
   "ENABLE_DIARIZATION": false,
-  "DIARIZATION_MODEL": "pyannote/speaker-diarization",
+  "DIARIZATION_MODEL": "pyannote/speaker-diarization-3.1",
   "OUTPUT_FORMAT": "txt",
   "NUM_THREADS": 8,
   "LOG_LEVEL": "INFO",
