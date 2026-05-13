@@ -234,8 +234,3 @@ This project was developed as part of a Master's thesis to convert a research pr
 * Docker Hub Image:
   https://hub.docker.com/r/kavitha245p/speech2text
 
----
-
-## 👩‍💻 Author
-
-Kavitha
