@@ -162,7 +162,7 @@ python trascrizione.py \
 
 ---
 
-## 🎧 Example: Audio Input (Professor Requirement)
+## 🎧 Example: Audio Input
 
 ```bash
 INPUT_FILE=lecture.wav OUTPUT_FILE=lecture.txt docker compose up
