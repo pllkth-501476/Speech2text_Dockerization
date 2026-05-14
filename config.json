@@ -1,5 +1,5 @@
 {
-  "MODEL_NAME": "medium",
+  "MODEL_NAME": "small",
   "LANGUAGE": "auto",
   "TRANSLATE": false,
   "ENABLE_DIARIZATION": false,
