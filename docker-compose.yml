@@ -10,7 +10,7 @@ services:
       OUTPUT_FILE: ${OUTPUT_FILE:-english.txt}
 
       # Whisper parameters
-      MODEL_NAME: ${MODEL_NAME:-medium}
+      MODEL_NAME: ${MODEL_NAME:-small}
       LANGUAGE: ${LANGUAGE:-auto}
       TRANSLATE: ${TRANSLATE:-false}
 
