@@ -8,6 +8,6 @@
   "NUM_THREADS": 8,
   "LOG_LEVEL": "INFO",
   "HF_TOKEN": null,
-  "INPUT_FILE": "english.mp4",
-  "OUTPUT_FILE": "english.txt"
+  "INPUT_FILE": "input1.mp4",
+  "OUTPUT_FILE": "input1.txt"
 }

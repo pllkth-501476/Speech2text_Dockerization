@@ -3,26 +3,6 @@ services:
     build: .
     image: kavitha245p/speech2text:cpu
     container_name: stt_container
-    environment:
-      # --- Runtime configuration (can be overridden without rebuilding the image) ---
-      # Input/output filenames (relative to mounted folders)
-      INPUT_FILE: ${INPUT_FILE:-english.mp4}
-      OUTPUT_FILE: ${OUTPUT_FILE:-english.txt}
-
-      # Whisper parameters
-      MODEL_NAME: ${MODEL_NAME:-small}
-      LANGUAGE: ${LANGUAGE:-auto}
-      TRANSLATE: ${TRANSLATE:-false}
-
-      # Diarization parameters (requires Hugging Face authentication + acceptance of model terms)
-      ENABLE_DIARIZATION: ${ENABLE_DIARIZATION:-True}
-      DIARIZATION_MODEL: ${DIARIZATION_MODEL:-pyannote/speaker-diarization}
-      HF_TOKEN: ${HF_TOKEN:-}
-
-      # Runtime / logging
-      NUM_THREADS: ${NUM_THREADS:-8}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-
     volumes:
       - ./input_videos:/app/input_videos
       - ./output:/app/output
